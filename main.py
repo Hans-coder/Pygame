@@ -1,4 +1,5 @@
 import imp
+from operator import le
 from tkinter import CENTER, font
 import pygame
 import random
@@ -34,8 +35,23 @@ rock_imgs = []
 for i in range(7):
     rock_imgs.append(pygame.image.load(os.path.join('img', f'rock{i}.png')).convert())
 
+#使用字典存放爆炸動畫
+expl_anim = {}
+expl_anim['lg'] = []
+expl_anim['sm'] = []
+expl_anim['player'] = [] 
+for i in range(9):
+    expl_img = pygame.image.load(os.path.join('img', f'expl{i}.png')).convert()
+    expl_img.set_colorkey(BLACK)
+    expl_anim['lg'].append(pygame.transform.scale(expl_img, (75, 75)))
+    expl_anim['sm'].append(pygame.transform.scale(expl_img, (30, 30)))
+    player_expl_img = pygame.image.load(os.path.join('img', f'player_expl{i}.png')).convert()
+    player_expl_img.set_colorkey(BLACK)
+    expl_anim['player'].append(player_expl_img)
+
 #載入音樂
 shoot_sound = pygame.mixer.Sound(os.path.join('sound', 'shoot.wav'))
+die_sound = pygame.mixer.Sound(os.path.join('sound', 'rumble.ogg'))
 expl_sounds = [
     pygame.mixer.Sound(os.path.join('sound', 'expl0.wav')),
     pygame.mixer.Sound(os.path.join('sound', 'expl1.wav'))
@@ -152,6 +168,31 @@ class Bullet(pygame.sprite.Sprite):
         if self.rect.bottom < 0:
             self.kill()
 
+class Explosion(pygame.sprite.Sprite):
+    def __init__(self, center, size):
+        pygame.sprite.Sprite.__init__(self)
+        self.size = size
+        self.image = expl_anim[self.size][0]
+        self.rect = self.image.get_rect() #定位框起來的意思
+        self.rect.center = center
+        self.frame = 0
+        self.last_update = pygame.time.get_ticks()
+        self.frame_rate = 50
+
+    def update(self):
+        now = pygame.time.get_ticks()
+        if now - self.last_update > self.frame_rate:
+            self.last_update = now
+            self.frame += 1
+            if self.frame == len(expl_anim[self.size]):
+                self.kill()
+            else:
+                self.image = expl_anim[self.size][self.frame]
+                center = self.rect.center
+                self.rect = self.image.get_rect()
+                self.rect.center = center
+
+
 all_sprites = pygame.sprite.Group()
 rocks = pygame.sprite.Group()
 bullets = pygame.sprite.Group()
@@ -180,14 +221,21 @@ while running:
     for hit in hits:
         random.choice(expl_sounds).play()
         score += hit.radius
+        expl = Explosion(hit.rect.center, 'lg')
+        all_sprites.add(expl)
         new_rock()
 
     hits = pygame.sprite.spritecollide(player, rocks, True, pygame.sprite.collide_circle)
     for hit in hits:
         new_rock()
         player.health -= hit.radius
+        expl = Explosion(hit.rect.center, 'sm')
+        all_sprites.add(expl)
         if player.health <= 0:
-            running = False
+            die = Explosion(player.rect.center, 'player')
+            all_sprites.add(die)
+            die_sound.play()
+            #running = False
 
     # 畫面顯示
     screen.fill(BLACK)
